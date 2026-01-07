@@ -12,7 +12,7 @@ contract TokenVaultV3 is TokenVaultV2 {
     uint256 internal _withdrawalDelay;
     mapping(address => WithdrawalRequest) internal _withdrawals;
 
-    // Reduce gap: V2 had [42]; we add 1 uint256 + mapping => 2 slots
+    // Reduce gap: V2 had [42]; we add 2 slots => 40 left
     uint256[40] private __gapV3;
 
     event WithdrawalRequested(address indexed user, uint256 amount, uint256 when);
@@ -29,7 +29,9 @@ contract TokenVaultV3 is TokenVaultV2 {
         return _withdrawalDelay;
     }
 
-    function getWithdrawalRequest(address user) external view returns (uint256 amount, uint256 requestTime) {
+    function getWithdrawalRequest(
+        address user
+    ) external view returns (uint256 amount, uint256 requestTime) {
         WithdrawalRequest memory r = _withdrawals[user];
         return (r.amount, r.requestTime);
     }
@@ -49,7 +51,10 @@ contract TokenVaultV3 is TokenVaultV2 {
     function executeWithdrawal() external returns (uint256) {
         WithdrawalRequest memory r = _withdrawals[msg.sender];
         require(r.amount > 0, "TokenVaultV3: no request");
-        require(block.timestamp >= r.requestTime + _withdrawalDelay, "TokenVaultV3: delay not passed");
+        require(
+            block.timestamp >= r.requestTime + _withdrawalDelay,
+            "TokenVaultV3: delay not passed"
+        );
 
         uint256 amount = r.amount;
         require(amount <= _balances[msg.sender], "TokenVaultV3: insufficient balance");
@@ -76,7 +81,7 @@ contract TokenVaultV3 is TokenVaultV2 {
         return bal;
     }
 
-    function getImplementationVersion() external pure returns (string memory) {
+    function getImplementationVersion() external pure override returns (string memory) {
         return "V3";
     }
 }

@@ -4,10 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-  "test": "npx hardhat test",
-  "compile": "npx hardhat compile"
-}
-,
+    "test": "npx hardhat test",
+    "compile": "npx hardhat compile"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/lohithadamisetti123/token-vault-uups.git"

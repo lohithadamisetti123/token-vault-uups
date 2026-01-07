@@ -9,7 +9,7 @@ contract TokenVaultV2 is TokenVaultV1 {
     mapping(address => uint256) internal _lastClaimTime;
     bool internal _depositsPaused;
 
-    // Reduce gap: V1 had [45]; we added 2 slots (yieldRate, depositsPaused) + mapping (1 slot) => 3
+    // Reduce gap: V1 had [45]; we added 3 slots => 42 left
     uint256[42] private __gapV2;
 
     event YieldRateUpdated(uint256 newRate);
@@ -75,15 +75,27 @@ contract TokenVaultV2 is TokenVaultV1 {
         return _depositsPaused;
     }
 
-    function deposit(uint256 amount) public override {
-        require(!_depositsPaused, "TokenVaultV2: deposits paused");
-        if (_lastClaimTime[msg.sender] == 0) {
-            _lastClaimTime[msg.sender] = block.timestamp;
-        }
-        super.deposit(amount);
+   function deposit(uint256 amount) public virtual override {
+    require(!_depositsPaused, "TokenVaultV2: deposits paused");
+    if (_lastClaimTime[msg.sender] == 0) {
+        _lastClaimTime[msg.sender] = block.timestamp;
     }
 
-    function getImplementationVersion() external pure returns (string memory) {
+    require(amount > 0, "TokenVaultV1: amount is zero");
+
+    uint256 fee = (amount * _depositFeeBasisPoints) / 10000;
+    uint256 netAmount = amount - fee;
+
+    require(
+        _token.transferFrom(msg.sender, address(this), amount),
+        "TokenVaultV1: transfer failed"
+    );
+
+    _balances[msg.sender] += netAmount;
+    _totalDeposits += netAmount;
+}
+
+    function getImplementationVersion() external pure virtual override returns (string memory) {
         return "V2";
     }
 }

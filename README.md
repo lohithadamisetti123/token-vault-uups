@@ -1,57 +1,119 @@
-# Sample Hardhat 3 Beta Project (`mocha` and `ethers`)
+# Token Vault UUPS
 
-This project showcases a Hardhat 3 Beta project using `mocha` for tests and the `ethers` library for Ethereum interactions.
+Upgradeable TokenVault system using the UUPS proxy pattern with three versions (V1 → V2 → V3).  
+Implements secure initialization, role-based access control, storage gaps, and state-preserving upgrades. [page:1][web:25]
 
-To learn more about the Hardhat 3 Beta, please visit the [Getting Started guide](https://hardhat.org/docs/getting-started#getting-started-with-hardhat-3). To share your feedback, join our [Hardhat 3 Beta](https://hardhat.org/hardhat3-beta-telegram-group) Telegram group or [open an issue](https://github.com/NomicFoundation/hardhat/issues/new) in our GitHub issue tracker.
+---
 
-## Project Overview
+## Screenshots
 
-This example project includes:
+- All tests passing (24/24). [file:45]  
+- Solidity coverage summary for TokenVaultV1–V3 and MockERC20. [file:46]
 
-- A simple Hardhat configuration file.
-- Foundry-compatible Solidity unit tests.
-- TypeScript integration tests using `mocha` and ethers.js
-- Examples demonstrating how to connect to different types of networks, including locally simulating OP mainnet.
+---
 
-## Usage
+## 1. Installation & Setup
 
-### Running Tests
+From the project root:
 
-To run all the tests in the project, execute the following command:
+```bash
+npm install
+```
 
-```shell
+Installs Hardhat, OpenZeppelin upgradeable contracts, the upgrades plugin, and test tooling. [web:25]
+
+---
+
+## 2. Compile & Test
+
+Compile:
+
+```bash
+npx hardhat compile
+```
+
+Run the full test suite:
+
+```bash
 npx hardhat test
 ```
 
-You can also selectively run the Solidity or `mocha` tests:
+Tests cover V1 behaviour (fees, balances), V1→V2 and V2→V3 upgrades, withdrawal delays, emergency withdraw, and security properties (unauthorized upgrades, initialization, storage layout, selector clashes). [file:45][page:1]
 
-```shell
-npx hardhat test solidity
-npx hardhat test mocha
+Coverage (optional, but already configured):
+
+```bash
+npx hardhat coverage
 ```
 
-### Make a deployment to Sepolia
+Writes reports to `./coverage/` and `./coverage.json`. [file:46]
 
-This project includes an example Ignition module to deploy the contract. You can deploy this module to a locally simulated chain or to Sepolia.
+---
+## Screenshots
 
-To run the deployment to a local chain:
+- All tests passing:
 
-```shell
-npx hardhat ignition deploy ignition/modules/Counter.ts
+  `screenshots/tests-passing.png`
+
+- Coverage summary:
+
+  `screenshots/coverage.png`
+
+## 3. Deploy & Upgrade (local Hardhat)
+
+Deploy V1:
+
+```bash
+npx hardhat run scripts/deploy-v1.js --network hardhat
 ```
 
-To run the deployment to Sepolia, you need an account with funds to send the transaction. The provided Hardhat configuration includes a Configuration Variable called `SEPOLIA_PRIVATE_KEY`, which you can use to set the private key of the account you want to use.
+- Deploys `MockERC20` and `TokenVaultV1` as UUPS proxies.
+- Assigns `DEFAULT_ADMIN_ROLE`, `UPGRADER_ROLE`, `PAUSER_ROLE` to the deployer. [web:20][web:12]
 
-You can set the `SEPOLIA_PRIVATE_KEY` variable using the `hardhat-keystore` plugin or by setting it as an environment variable.
+Upgrade to V2:
 
-To set the `SEPOLIA_PRIVATE_KEY` config variable using `hardhat-keystore`:
-
-```shell
-npx hardhat keystore set SEPOLIA_PRIVATE_KEY
+```bash
+VAULT_PROXY=<vault_proxy_address> npx hardhat run scripts/upgrade-to-v2.js --network hardhat
 ```
 
-After setting the variable, you can run the deployment with the Sepolia network:
+Upgrade to V3:
 
-```shell
-npx hardhat ignition deploy --network sepolia ignition/modules/Counter.ts
+```bash
+VAULT_PROXY=<vault_proxy_address> npx hardhat run scripts/upgrade-to-v3.js --network hardhat
 ```
+
+Both upgrades preserve user balances, total deposits, and role assignments. [page:1]
+
+---
+
+## 4. Design Summary
+
+**Storage layout**
+
+- V1: core state (`_token`, `_admin`, `_depositFeeBasisPoints`, `_totalDeposits`, `_balances`) + `uint256[45]` gap.
+- V2: adds `_yieldRateBasisPoints`, `_lastClaimTime`, `_depositsPaused`, reduces gap to `uint256[42]`.
+- V3: adds `_withdrawalDelay`, `_withdrawals`, reduces gap to `uint256[40]`.
+- No reordering or type changes; security tests assert no layout collisions. [web:28][web:34]
+
+**Access control**
+
+- `DEFAULT_ADMIN_ROLE`: grants/revokes all roles.
+- `UPGRADER_ROLE`: required by `_authorizeUpgrade` for UUPS upgrades.
+- `PAUSER_ROLE`: used in V2+ to pause/unpause deposits.
+- MockERC20 also uses `DEFAULT_ADMIN_ROLE` + `UPGRADER_ROLE` to be upgrade-safe. [web:19][web:25]
+
+**Business logic**
+
+- V1: deposit/withdraw with fee in bps, fee deducted before crediting user.
+- V2: time-based yield using  
+  \(\text{yield} = \frac{\text{balance} \times \text{yieldRate} \times \text{timeElapsed}}{365\ \text{days} \times 10000}\) (simple interest, no auto-compound). [web:25]
+- V3: withdrawal delay with `requestWithdrawal` / `executeWithdrawal`, plus `emergencyWithdraw` that bypasses delay but preserves invariants. [page:1]
+
+**Initialization & UUPS safety**
+
+- All logic contracts use `initializer` instead of constructors and call `_disableInitializers()` in constructors.
+- Upgrades go through `UUPSUpgradeable` with `_authorizeUpgrade` protected by `UPGRADER_ROLE`.
+- Security tests ensure implementation contracts cannot be initialized directly and unauthorized upgrades revert. [web:24][web:28]
+```
+
+***
