@@ -51,13 +51,16 @@ describe("Security", function () {
     expect(V2.interface.fragments.length).to.be.lte(V3.interface.fragments.length);
   });
 
-  it("should prevent function selector clashing", async function () {
-    const V3 = await ethers.getContractFactory("TokenVaultV3");
-    const selectors = new Set();
-    for (const fn of Object.values(V3.interface.functions)) {
-      const sig = V3.interface.getSighash(fn);
-      expect(selectors.has(sig)).to.equal(false);
-      selectors.add(sig);
-    }
-  });
+it("should prevent function selector clashing", async function () {
+  const V3 = await ethers.getContractFactory("TokenVaultV3");
+  const selectors = new Set();
+
+  for (const fnName in V3.interface.functions) {
+    const fragment = V3.interface.functions[fnName];
+    const sig = V3.interface.getSighash(fragment);
+    expect(selectors.has(sig)).to.equal(false);
+    selectors.add(sig);
+  }
+});
+
 });

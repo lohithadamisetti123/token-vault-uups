@@ -47,19 +47,24 @@ describe("Upgrade V1 to V2", function () {
     expect(await vaultV2.getYieldRate()).to.equal(500n);
   });
 
-  it("should calculate yield correctly", async function () {
-    await vaultV2.connect(owner).setYieldRate(500);
-    await ethers.provider.send("evm_increaseTime", [365 * 24 * 60 * 60]);
-    await ethers.provider.send("evm_mine");
+it("should calculate yield correctly", async function () {
+  await vaultV2.connect(owner).setYieldRate(500);
 
-    const before = await token.balanceOf(user.address);
-    const claimed = await vaultV2.connect(user).claimYield();
-    const tx = await claimed.wait();
-    const event = tx.logs.find(() => true); // placeholder
+  // First call sets lastClaimTime but accrues 0
+  await vaultV2.connect(user).claimYield();
 
-    const after = await token.balanceOf(user.address);
-    expect(after).to.be.gt(before);
-  });
+  // Travel 1 year
+  await ethers.provider.send("evm_increaseTime", [365 * 24 * 60 * 60]);
+  await ethers.provider.send("evm_mine");
+
+  const before = await token.balanceOf(user.address);
+  const tx = await vaultV2.connect(user).claimYield();
+  await tx.wait();
+  const after = await token.balanceOf(user.address);
+
+  expect(after).to.be.gt(before);
+});
+
 
   it("should prevent non-admin from setting yield rate", async function () {
     await expect(
